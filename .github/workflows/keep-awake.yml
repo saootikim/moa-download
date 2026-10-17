@@ -1,0 +1,37 @@
+# Moa 서버(Render 무료)는 15분 동안 접속이 없으면 잠든다.
+# 5분마다 /health를 불러 깨어 있게 한다.
+name: 서버 깨우기
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 서버 찌르기
+        run: |
+          for i in 1 2 3; do
+            curl -fsS --max-time 90 https://moa-server-8y1s.onrender.com/health && exit 0
+            sleep 10
+          done
+          echo "서버 응답 없음"
+
+      # GitHub은 60일 동안 저장소에 변화가 없으면 예약 실행을 멈춘다. 매달 1일에 빈 커밋을 남겨 막는다.
+      - name: 예약 실행 유지
+        if: github.event.schedule && format('{0}', github.run_number) != '' 
+        run: |
+          if [ "$(date -u +%d)" = "01" ] && [ "$(date -u +%H)" = "00" ] && [ "$(date -u +%M)" -lt 5 ]; then
+            git clone --depth 1 "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" repo
+            cd repo
+            git config user.name "github-actions"
+            git config user.email "github-actions@users.noreply.github.com"
+            git commit --allow-empty -m "예약 실행 유지"
+            git push
+          fi
